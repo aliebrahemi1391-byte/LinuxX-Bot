@@ -5,43 +5,63 @@ on:
 
 jobs:
   build:
+    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download project ZIP
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Extract LinuxX project
+      - name: Find and extract ZIP
+        shell: bash
         run: |
-          unzip -o LinuxX_Bot_Standalone_Android_Project.zip -d linuxx
-          echo "Project files:"
-          find linuxx -maxdepth 2 -type f | head -100
+          set -e
 
-      - name: Install Buildozer dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            git zip unzip openjdk-17-jdk \
-            python3-pip python3-venv \
-            autoconf automake libtool pkg-config \
-            zlib1g-dev libncurses5-dev libncursesw5-dev \
-            libtinfo5 cmake libffi-dev libssl-dev
+          ZIP_FILE=$(find . -maxdepth 2 -type f -iname "*.zip" | head -n 1)
 
-      - name: Install Python build tools
+          if [ -z "$ZIP_FILE" ]; then
+            echo "No ZIP file found."
+            exit 1
+          fi
+
+          echo "ZIP: $ZIP_FILE"
+
+          mkdir -p project
+          unzip -q "$ZIP_FILE" -d project
+
+          echo "Extracted files:"
+          find project -maxdepth 3 -type f | head -100
+
+      - name: Find Buildozer project
+        shell: bash
         run: |
-          python3 -m venv .venv
-          . .venv/bin/activate
-          pip install --upgrade pip
-          pip install buildozer cython
+          set -e
+
+          SPEC=$(find project -type f -name "buildozer.spec" | head -n 1)
+
+          if [ -z "$SPEC" ]; then
+            echo "buildozer.spec was not found."
+            echo "The ZIP must contain a Buildozer/Kivy project."
+            exit 1
+          fi
+
+          APP_DIR=$(dirname "$SPEC")
+
+          echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
+
+          echo "Build directory:"
+          ls -la "$APP_DIR"
 
       - name: Build APK
-        run: |
-          . .venv/bin/activate
-          cd linuxx
-          buildozer android debug
+        uses: ArtemSBulgakov/buildozer-action@v1
+        id: buildozer
+        with:
+          workdir: ${{ env.APP_DIR }}
+          buildozer_version: stable
+          command: buildozer android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: LinuxX-Bot-APK
-          path: linuxx/bin/*.apk
+          path: ${{ steps.buildozer.outputs.filename }}
