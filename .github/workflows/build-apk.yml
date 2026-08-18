@@ -1,0 +1,47 @@
+name: LinuxX Bot APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download project ZIP
+        uses: actions/checkout@v4
+
+      - name: Extract LinuxX project
+        run: |
+          unzip -o LinuxX_Bot_Standalone_Android_Project.zip -d linuxx
+          echo "Project files:"
+          find linuxx -maxdepth 2 -type f | head -100
+
+      - name: Install Buildozer dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git zip unzip openjdk-17-jdk \
+            python3-pip python3-venv \
+            autoconf automake libtool pkg-config \
+            zlib1g-dev libncurses5-dev libncursesw5-dev \
+            libtinfo5 cmake libffi-dev libssl-dev
+
+      - name: Install Python build tools
+        run: |
+          python3 -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install buildozer cython
+
+      - name: Build APK
+        run: |
+          . .venv/bin/activate
+          cd linuxx
+          buildozer android debug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LinuxX-Bot-APK
+          path: linuxx/bin/*.apk
